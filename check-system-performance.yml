@@ -1,0 +1,61 @@
+---
+- name: Check System Slowness and Send Email Alerts
+  hosts: remote_host
+  gather_facts: false
+
+  vars:
+    email_recipient: "recipient@example.com"
+    email_subject: "System Slowness Alert"
+
+  tasks:
+    - name: Check CPU usage
+      shell: top -b -n 1 | grep 'Cpu(s)'
+      register: cpu_output
+
+    - name: Check memory usage
+      shell: free -m | grep 'Mem:'
+      register: memory_output
+
+    - name: Check top CPU-consuming processes
+      shell: top -b -n 1 -o %CPU | head -n 12
+      register: cpu_processes_output
+
+    - name: Check top memory-consuming processes
+      shell: top -b -n 1 -o %MEM | head -n 12
+      register: memory_processes_output
+
+    - name: Print CPU usage
+      debug:
+        var: cpu_output.stdout_lines
+
+    - name: Print memory usage
+      debug:
+        var: memory_output.stdout_lines
+
+    - name: Print top CPU-consuming processes
+      debug:
+        var: cpu_processes_output.stdout_lines
+
+    - name: Print top memory-consuming processes
+      debug:
+        var: memory_processes_output.stdout_lines
+
+    - name: Send email alert
+      mail:
+        host: "smtp.example.com"
+        port: 25
+        from: "sender@example.com"
+        to: "{{ email_recipient }}"
+        subject: "{{ email_subject }}"
+        body: |
+          CPU Usage:
+          {{ cpu_output.stdout }}
+
+          Memory Usage:
+          {{ memory_output.stdout }}
+
+          Top CPU-consuming processes:
+          {{ cpu_processes_output.stdout }}
+
+          Top memory-consuming processes:
+          {{ memory_processes_output.stdout }}
