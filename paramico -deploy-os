@@ -1,0 +1,68 @@
+
+
+
+
+
+import paramiko
+import time
+
+# iLO credentials and target server details
+ilo_host = "<ilo-ip-address>"      # Replace with your iLO4 IP address
+username = "<ilo-username>"        # Replace with your iLO4 username
+password = "<ilo-password>"        # Replace with your iLO4 password
+mac_address = "<mac-address>"      # MAC address of the server
+fixed_ip = "<fixed-ip-address>"    # Fixed IP address for the server
+kickstart_url = "http://192.168.1.1/kickstart/myserver.cfg"  # Replace with the actual URL of your kickstart file
+
+# Function to execute commands over SSH on iLO4
+def run_ilo_command(command):
+    try:
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        # Connect to the iLO4 interface via SSH
+        ssh_client.connect(ilo_host, username=username, password=password)
+
+        # Execute the command
+        stdin, stdout, stderr = ssh_client.exec_command(command)
+        time.sleep(2)
+
+        # Print output and errors (if any)
+        output = stdout.read().decode()
+        error = stderr.read().decode()
+
+        if output:
+            print(f"Output: {output}")
+        if error:
+            print(f"Error: {error}")
+
+        ssh_client.close()
+    except Exception as e:
+        print(f"Failed to run command: {e}")
+
+# Function to initiate PXE boot with Kickstart and set boot order
+def pxe_boot_via_ilo4():
+    try:
+        # Set boot order to PXE
+        print(f"Setting server with MAC {mac_address} to PXE boot...")
+        run_ilo_command("set /map1/reset_bootopt1 boot_order=NETWORK_PXE")
+
+        # Power cycle the server to initiate PXE boot
+        print("Rebooting the server for PXE boot...")
+        run_ilo_command("power reset")
+
+        print(f"Server with MAC {mac_address} should now boot via PXE and start the automated installation.")
+    
+    except Exception as e:
+        print(f"An error occurred during PXE boot: {e}")
+
+# Deploying Red Hat Linux via PXE Boot and Kickstart
+def deploy_redhat_linux():
+    # Ensure PXE server is ready and set up with the fixed IP and MAC mapping
+    print(f"Starting Red Hat Linux deployment for server with IP {fixed_ip} and MAC {mac_address}.")
+    
+    # Initiate the PXE boot process
+    pxe_boot_via_ilo4()
+
+# Call the function to deploy Red Hat Linux on the server
+deploy_redhat_linux()
