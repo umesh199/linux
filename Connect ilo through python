@@ -1,0 +1,36 @@
+import paramiko
+
+# iLO credentials
+ilo_host = "<ilo-ip-address>"  # Replace with the iLO IP address
+username = "<ilo-username>"    # Replace with your iLO username
+password = "<ilo-password>"    # Replace with your iLO password
+
+def reboot_server_via_ssh():
+    try:
+        # Create an SSH client instance
+        ssh_client = paramiko.SSHClient()
+
+        # Automatically add untrusted hosts (like the iLO server) to known_hosts
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        # Connect to the iLO interface via SSH
+        ssh_client.connect(ilo_host, username=username, password=password)
+
+        # Command to reboot the server
+        reboot_cmd = "power reset"
+
+        # Execute the command on the iLO interface
+        stdin, stdout, stderr = ssh_client.exec_command(reboot_cmd)
+
+        # Print the output and error (if any)
+        print("Output:", stdout.read().decode())
+        print("Error:", stderr.read().decode())
+
+        # Close the SSH connection
+        ssh_client.close()
+
+    except Exception as e:
+        print(f"Failed to reboot server: {e}")
+
+# Call the function to reboot the server
+reboot_server_via_ssh()
