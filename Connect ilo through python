@@ -14,7 +14,7 @@ def reboot_server_via_ssh():
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         # Connect to the iLO interface via SSH
-        ssh_client.connect(ilo_host, username=username, password=password)
+        ssh_client.connect(ilo_host, username=username, password=password,allow_agent=False,look_for_keys=False)
 
         # Command to reboot the server
         reboot_cmd = "power reset"
