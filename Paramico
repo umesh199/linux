@@ -1,0 +1,82 @@
+import paramiko
+import time
+
+# Function to execute a command on the server via SSH
+def execute_ssh_command(host, username, password, command):
+    try:
+        # Initialize SSH client
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # Connect to the host using SSH
+        client.connect(host, username=username, password=password)
+        
+        # Execute the command
+        stdin, stdout, stderr = client.exec_command(command)
+        stdout_output = stdout.read().decode()
+        stderr_output = stderr.read().decode()
+        
+        # Close the connection
+        client.close()
+        
+        # Check if there are errors
+        if stderr_output:
+            print(f"Error on {host}: {stderr_output}")
+        else:
+            print(f"Success on {host}: {stdout_output}")
+        
+    except Exception as e:
+        print(f"Exception occurred while executing command on {host}: {e}")
+
+# Function to set boot order to network boot via IPMI over SSH
+def set_boot_order_to_network(ipmi_host, ipmi_user, ipmi_pass):
+    try:
+        # IPMI command to set boot device to PXE (network boot)
+        command = "ipmitool chassis bootdev pxe options=efiboot"
+        print(f"Setting boot order to network boot on {ipmi_host}...")
+        execute_ssh_command(ipmi_host, ipmi_user, ipmi_pass, command)
+    
+    except Exception as e:
+        print(f"Exception occurred while setting boot order: {e}")
+
+# Function to reboot the server using IPMI over SSH
+def reboot_server(ipmi_host, ipmi_user, ipmi_pass):
+    try:
+        # IPMI command to reboot the server
+        command = "ipmitool chassis power cycle"
+        print(f"Rebooting server {ipmi_host}...")
+        execute_ssh_command(ipmi_host, ipmi_user, ipmi_pass, command)
+    
+    except Exception as e:
+        print(f"Exception occurred while rebooting server: {e}")
+
+# Main function to deploy OS via PXE boot using Kickstart
+def deploy_os_via_pxe(ipmi_host, ipmi_user, ipmi_pass):
+    # Step 1: Set boot order to network boot (PXE)
+    set_boot_order_to_network(ipmi_host, ipmi_user, ipmi_pass)
+    
+    # Wait for a few seconds to ensure the command is processed
+    time.sleep(5)
+    
+    # Step 2: Reboot the server to initiate PXE boot
+    reboot_server(ipmi_host, ipmi_user, ipmi_pass)
+
+if __name__ == "__main__":
+    # Example IPMI credentials for Supermicro servers
+    ipmi_credentials = [
+        {
+            "ipmi_host": "192.168.1.100",
+            "ipmi_user": "admin",
+            "ipmi_pass": "password"
+        },
+        {
+            "ipmi_host": "192.168.1.101",
+            "ipmi_user": "admin",
+            "ipmi_pass": "password"
+        }
+    ]
+
+    # Loop through each server and deploy OS
+    for creds in ipmi_credentials:
+        print(f"Deploying OS on {creds['ipmi_host']}")
+        deploy_os_via_pxe(creds["ipmi_host"], creds["ipmi_user"], creds["ipmi_pass"])
