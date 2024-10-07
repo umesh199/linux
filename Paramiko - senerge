@@ -1,0 +1,56 @@
+import paramiko
+import time
+
+# Function to SSH into a blade's BMC or OS
+def ssh_to_server(ip, username, password, commands=None):
+    try:
+        # Create a new SSH client
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # Connect to the server
+        print(f"Connecting to {ip}...")
+        client.connect(ip, username=username, password=password)
+        
+        # If commands are provided, execute them on the remote server
+        if commands:
+            for command in commands:
+                print(f"Executing command: {command}")
+                stdin, stdout, stderr = client.exec_command(command)
+                
+                # Print the command output
+                print(f"Output:\n{stdout.read().decode()}")
+                print(f"Error (if any):\n{stderr.read().decode()}")
+                
+                # Wait a little before executing the next command
+                time.sleep(1)
+
+        # Close the connection
+        client.close()
+        print(f"Disconnected from {ip}")
+    except Exception as e:
+        print(f"Failed to connect to {ip}. Error: {e}")
+
+# List of BMC/IPMI IP addresses for the blades
+ipmi_ips = ["192.168.1.10", "192.168.1.11", "192.168.1.12"]
+ipmi_user = "ADMIN"
+ipmi_pass = "password"
+
+# List of OS IP addresses for the blades (if you want to SSH into the OS)
+os_ips = ["192.168.2.10", "192.168.2.11", "192.168.2.12"]
+os_user = "root"
+os_pass = "password"
+
+# Commands to run on the remote servers (optional)
+commands = [
+    "ipmitool chassis status",  # Example of an IPMI command
+    "ls -l",                    # Example OS command
+]
+
+# SSH into each BMC/IPMI interface
+for ip in ipmi_ips:
+    ssh_to_server(ip, ipmi_user, ipmi_pass, commands=["ipmitool chassis status"])
+
+# SSH into each blade's OS (uncomment this if you need OS access)
+# for ip in os_ips:
+#     ssh_to_server(ip, os_user, os_pass, commands=["ls -l"])
