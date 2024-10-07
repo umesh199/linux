@@ -1,0 +1,121 @@
+import requests
+import json
+import time
+
+# Disable SSL warnings (optional, based on your security policies)
+requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+
+# HPE OneView connection details
+ONEVIEW_HOST = 'https://oneview.example.com'  # Replace with your OneView host
+ONEVIEW_USER = 'admin'                        # Replace with your OneView username
+ONEVIEW_PASS = 'password'                     # Replace with your OneView password
+
+# OneView API URL paths
+LOGIN_URI = '/rest/login-sessions'
+SERVER_HARDWARE_URI = '/rest/server-hardware'
+
+# Function to log in to HPE OneView
+def oneview_login():
+    login_url = ONEVIEW_HOST + LOGIN_URI
+    payload = {
+        "userName": ONEVIEW_USER,
+        "password": ONEVIEW_PASS
+    }
+    headers = {'Content-Type': 'application/json'}
+    
+    # Send the login request
+    response = requests.post(login_url, headers=headers, json=payload, verify=False)
+    
+    if response.status_code == 200:
+        session_id = response.json()['sessionID']
+        print("Successfully logged in to OneView!")
+        return session_id
+    else:
+        print(f"Failed to log in: {response.status_code}, {response.text}")
+        return None
+
+# Function to set boot order to PXE
+def set_boot_order_to_pxe(server_hardware_uri, session_id):
+    # Update boot order to PXE
+    pxe_boot_order_payload = {
+        "boot": {
+            "manageBoot": True,
+            "order": ["PXE"]
+        }
+    }
+    
+    # Set headers with the session ID
+    headers = {
+        'Content-Type': 'application/json',
+        'Auth': session_id
+    }
+    
+    # Send request to set boot order
+    response = requests.put(ONEVIEW_HOST + server_hardware_uri, headers=headers, json=pxe_boot_order_payload, verify=False)
+    
+    if response.status_code == 200:
+        print(f"Boot order successfully set to PXE for {server_hardware_uri}")
+    else:
+        print(f"Failed to set boot order: {response.status_code}, {response.text}")
+
+# Function to reboot the server hardware
+def reboot_server(server_hardware_uri, session_id):
+    reboot_payload = {
+        "powerState": "Reboot",
+        "powerControl": "PressAndHold"
+    }
+    
+    headers = {
+        'Content-Type': 'application/json',
+        'Auth': session_id
+    }
+    
+    # Send request to reboot the server
+    response = requests.put(ONEVIEW_HOST + server_hardware_uri + "/powerState", headers=headers, json=reboot_payload, verify=False)
+    
+    if response.status_code == 200:
+        print(f"Successfully rebooted server {server_hardware_uri}")
+    else:
+        print(f"Failed to reboot server: {response.status_code}, {response.text}")
+
+# Main function to set up PXE boot and initiate OS provisioning
+def provision_rhel_via_pxe(server_name):
+    # Step 1: Log in to OneView
+    session_id = oneview_login()
+    if not session_id:
+        return
+    
+    # Step 2: Find the server hardware by name
+    headers = {'Auth': session_id}
+    response = requests.get(ONEVIEW_HOST + SERVER_HARDWARE_URI, headers=headers, verify=False)
+    
+    if response.status_code != 200:
+        print(f"Failed to retrieve server hardware: {response.status_code}, {response.text}")
+        return
+    
+    # Parse the server hardware list and find the matching server
+    servers = response.json()['members']
+    server_hardware_uri = None
+    for server in servers:
+        if server['name'] == server_name:
+            server_hardware_uri = server['uri']
+            break
+    
+    if not server_hardware_uri:
+        print(f"Server {server_name} not found in OneView.")
+        return
+    
+    # Step 3: Set boot order to PXE
+    set_boot_order_to_pxe(server_hardware_uri, session_id)
+    
+    # Step 4: Reboot the server to start PXE boot
+    reboot_server(server_hardware_uri, session_id)
+    
+    # Step 5: Log out from OneView (optional, session expires automatically)
+    print("Provisioning initiated. Please monitor the PXE boot process.")
+    
+# Example usage: Provision a specific server
+if __name__ == "__main__":
+    server_name = "Synergy-Compute-1"  # Replace with the name of your server in OneView
+    provision_rhel_via_pxe(server_name)
+
