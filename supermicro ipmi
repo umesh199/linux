@@ -1,0 +1,36 @@
+import subprocess
+
+# Supermicro iLO IPMI configuration
+ipmi_host = "192.168.1.200"  # IP address of the Supermicro IPMI interface
+ipmi_user = "ADMIN"  # IPMI username
+ipmi_pass = "password"  # IPMI password
+
+# Function to set boot order to PXE and reboot via Supermicro iLO IPMI
+def ipmi_pxe_boot():
+    try:
+        # Set the boot device to PXE
+        print(f"Setting boot order to PXE for Supermicro iLO at {ipmi_host}...")
+        subprocess.run([
+            "ipmitool", "-I", "lanplus", "-H", ipmi_host, "-U", ipmi_user, "-P", ipmi_pass,
+            "chassis", "bootdev", "pxe", "options=efiboot,persistent"
+        ])
+        
+        # Power cycle the server (reset to apply boot order change)
+        print("Rebooting the server to initiate PXE boot...")
+        subprocess.run([
+            "ipmitool", "-I", "lanplus", "-H", ipmi_host, "-U", ipmi_user, "-P", ipmi_pass,
+            "chassis", "power", "cycle"
+        ])
+        
+        print("Server is rebooting with PXE boot as the first boot device...")
+    except Exception as e:
+        print(f"Failed to set PXE boot or reboot server: {e}")
+
+# Main function to initiate PXE boot via IPMI
+def deploy_rhel8_via_pxe():
+    print("Initiating PXE boot via Supermicro iLO...")
+    ipmi_pxe_boot()
+    print("PXE boot has been initiated. Monitor the installation process.")
+
+if __name__ == "__main__":
+    deploy_rhel8_via_pxe()
