@@ -1,21 +1,28 @@
-# Script to change package names from 'rp' to 'packagename.X86_64'
-import os
 
-def change_package_names(input_file, output_file, package_name):
+import re
+
+def change_package_format(input_file, output_file):
     # List to hold modified package names
     modified_packages = []
     
+    # Regular expression to match the package format
+    pattern = re.compile(r'^(.*?)-(\d+\.\d+\.\d+)\..*$')
+
     # Read the input file
     with open(input_file, 'r') as file:
         # Iterate over each line in the input file
         for line in file:
-            # Strip whitespace and check for the 'rp' package
             package = line.strip()
-            if package == 'rp':
-                # Change 'rp' to 'packagename.X86_64'
-                modified_packages.append(f"{package_name}.X86_64")
+            # Use regex to match and transform the package name
+            match = pattern.match(package)
+            if match:
+                # Get the package name
+                package_name = match.group(1)
+                # Create new package format
+                new_package = f"{package_name}.x86_64"
+                modified_packages.append(new_package)
             else:
-                # Keep other package names unchanged
+                # Keep other package names unchanged if they don't match
                 modified_packages.append(package)
 
     # Write the modified package names to the output file
@@ -28,6 +35,5 @@ def change_package_names(input_file, output_file, package_name):
 # Example usage
 input_file = 'packages.txt'  # Input file with package names
 output_file = 'modified_packages.txt'  # Output file for modified names
-package_name = 'packagename'  # Name to replace 'rp'
 
-change_package_names(input_file, output_file, package_name)
+change_package_format(input_file, output_file)
