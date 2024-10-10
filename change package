@@ -1,11 +1,11 @@
 import re
 
-def convert_rpm_format(input_file, output_file):
+def convert_rhel8_rpm_format(input_file, output_file):
     # List to hold modified package names
     modified_packages = []
 
-    # Regular expression to match the RPM package format
-    pattern = re.compile(r'^(.*?)-(\d+\.\d+\.\d+).*?\.([a-zA-Z0-9]+)$')
+    # Regular expression to match the RHEL 8 RPM package format
+    pattern = re.compile(r'^(.*?)-(\d+\.\d+\.\d+)-(\d+)\.el8\.([a-zA-Z0-9]+)\.rpm$')
 
     # Read the input file
     with open(input_file, 'r') as file:
@@ -17,7 +17,7 @@ def convert_rpm_format(input_file, output_file):
             if match:
                 # Get the package name and architecture
                 package_name = match.group(1)
-                architecture = match.group(3)
+                architecture = match.group(4)  # Changed to group 4 for architecture
                 # Create new package format
                 new_package = f"{package_name}.{architecture}"
                 modified_packages.append(new_package)
@@ -36,4 +36,4 @@ def convert_rpm_format(input_file, output_file):
 input_file = 'packages.txt'  # Input file with RPM package names
 output_file = 'modified_packages.txt'  # Output file for modified names
 
-convert_rpm_format(input_file, output_file)
+convert_rhel8_rpm_format(input_file, output_file)
