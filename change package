@@ -1,12 +1,11 @@
-
 import re
 
-def change_package_format(input_file, output_file):
+def convert_rpm_format(input_file, output_file):
     # List to hold modified package names
     modified_packages = []
-    
-    # Regular expression to match the package format
-    pattern = re.compile(r'^(.*?)-(\d+\.\d+\.\d+)\..*$')
+
+    # Regular expression to match the RPM package format
+    pattern = re.compile(r'^(.*?)-(\d+\.\d+\.\d+).*?\.([a-zA-Z0-9]+)$')
 
     # Read the input file
     with open(input_file, 'r') as file:
@@ -16,10 +15,11 @@ def change_package_format(input_file, output_file):
             # Use regex to match and transform the package name
             match = pattern.match(package)
             if match:
-                # Get the package name
+                # Get the package name and architecture
                 package_name = match.group(1)
+                architecture = match.group(3)
                 # Create new package format
-                new_package = f"{package_name}.x86_64"
+                new_package = f"{package_name}.{architecture}"
                 modified_packages.append(new_package)
             else:
                 # Keep other package names unchanged if they don't match
@@ -33,7 +33,7 @@ def change_package_format(input_file, output_file):
     print(f"Package names updated and saved to '{output_file}'.")
 
 # Example usage
-input_file = 'packages.txt'  # Input file with package names
+input_file = 'packages.txt'  # Input file with RPM package names
 output_file = 'modified_packages.txt'  # Output file for modified names
 
-change_package_format(input_file, output_file)
+convert_rpm_format(input_file, output_file)
