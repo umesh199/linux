@@ -1,0 +1,41 @@
+import subprocess
+
+def set_boot_order(ip, username, password):
+    """Change the boot order to network boot for a specific iLO."""
+    try:
+        # Set the boot device to network
+        command = [
+            'ipmitool', '-I', 'lanplus', '-H', ip, '-U', username, '-P', password,
+            'chassis', 'bootdev', 'pxe', 'options=persistent'
+        ]
+        
+        # Execute the command
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        if result.returncode == 0:
+            print(f"Successfully set boot order to network boot for {ip}.")
+        else:
+            print(f"Failed to set boot order for {ip}: {result.stderr.decode().strip()}")
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+
+def main():
+    # Collect IPMI credentials
+    username = input("Enter your IPMI username: ")
+    password = input("Enter your IPMI password: ")
+    
+    # Read iLO IP addresses from a file
+    try:
+        with open('ilo_ips.txt', 'r') as file:
+            ilo_ips = [line.strip() for line in file if line.strip()]
+    except FileNotFoundError:
+        print("The file 'ilo_ips.txt' was not found.")
+        return
+
+    # Set the boot order for each iLO IP
+    for ip in ilo_ips:
+        set_boot_order(ip, username, password)
+
+if __name__ == "__main__":
+    main()
