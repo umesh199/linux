@@ -1,0 +1,19 @@
+import os
+
+def check_automounts(file_path):
+    try:
+        with open(file_path, 'r') as f:
+            automounts = f.read().splitlines()  # Read lines and remove whitespace
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        return
+
+    for automount in automounts:
+        if os.path.exists(automount):
+            print(f"Exists: {automount}")
+        else:
+            print(f"Does not exist: {automount}")
+
+if __name__ == "__main__":
+    input_file = 'automounts.txt'  # Replace with your input file
+    check_automounts(input_file)
