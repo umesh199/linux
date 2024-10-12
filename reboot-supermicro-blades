@@ -1,1 +1,32 @@
 
+import pyipmi
+from pyipmi import create_connection
+from pyipmi.interfaces import Ipmitool
+
+# Configuration: Update with your chassis IPMI details
+chassis_ip = "192.168.1.100"  # IP address of the chassis
+username = "admin"             # IPMI username
+password = "password"          # IPMI password
+blade_ids = range(1, 9)        # Assuming blades are numbered 1-8
+
+# Create IPMI interface
+interface = Ipmitool()
+connection = create_connection(interface)
+connection.target = chassis_ip
+connection.username = username
+connection.password = password
+connection.session.establish()
+
+def reboot_blade(blade_id):
+    try:
+        print(f"Rebooting blade {blade_id}...")
+        connection.issue_command(f"chassis power reset {blade_id}")
+        print(f"Blade {blade_id} reboot command sent.")
+    except Exception as e:
+        print(f"Failed to reboot blade {blade_id}: {e}")
+
+for blade_id in blade_ids:
+    reboot_blade(blade_id)
+
+# Clean up the session
+connection.session.close()
