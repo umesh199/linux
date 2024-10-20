@@ -1,0 +1,58 @@
+2. Modify the DHCP Configuration
+In your DHCP server configuration, you can specify options that allow for booting based on the MAC address. Here’s an example configuration snippet for a dhcpd.conf file:
+
+plaintext
+Copy code
+subnet 192.168.1.0 netmask 255.255.255.0 {
+    range 192.168.1.100 192.168.1.200;
+    option routers 192.168.1.1;
+    option domain-name-servers 192.168.1.1;
+
+    # Specific MAC address entries
+    host Server1 {
+        hardware ethernet 00:11:22:33:44:55;
+        fixed-address 192.168.1.101;
+        option bootfile-name "pxelinux.0";
+        option host-name "Server1";
+    }
+
+    host Server2 {
+        hardware ethernet 00:11:22:33:44:56;
+        fixed-address 192.168.1.102;
+        option bootfile-name "pxelinux.0";
+        option host-name "Server2";
+    }
+
+    host Server3 {
+        hardware ethernet 00:11:22:33:44:57;
+        fixed-address 192.168.1.103;
+        option bootfile-name "pxelinux.0";
+        option host-name "Server3";
+    }
+}
+In this setup, each server will be assigned a specific c
+
+How to Use the Script
+Save the Script: Save the above Python script as generate_pxe.py.
+
+Prepare the Inventory: Ensure your servers.csv file has the following format:
+
+plaintext
+Copy code
+mac_address,ip_address,server_name
+00:11:22:33:44:55,192.168.1.101,Server1
+00:11:22:33:44:56,192.168.1.102,Server2
+00:11:22:33:44:57,192.168.1.103,Server3
+Run the Script: Execute the script, passing the MAC address of the client as an argument.
+
+bash
+Copy code
+python generate_pxe.py 00:11:22:33:44:55
+Check the PXE Configuration: After running the script, check the generated PXE configuration in /var/lib/tftpboot/pxelinux.cfg/default.
+
+Notes
+Ensure you have permission to write to the PXE configuration file.
+The script will output a "No matching server found" option if no MAC address matches.
+Modify the Kickstart file URL as needed in the APPEND line within the script.
+Make sure to install any required libraries (like csv which is part of the Python standard library).
+This setup allows you to dynamically generate PXE configurations based on the MAC address provided at runtime, streamlining your deployment process. If you have any further questions or need assistance, feel free to ask!
