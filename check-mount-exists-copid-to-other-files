@@ -1,6 +1,6 @@
 import os
 
-def check_automounts(file_path):
+def check_automounts(file_path, exists_file, not_exists_file):
     try:
         with open(file_path, 'r') as f:
             automounts = f.read().splitlines()  # Read lines and remove whitespace
@@ -8,13 +8,18 @@ def check_automounts(file_path):
         print(f"File not found: {file_path}")
         return
 
-    for automount in automounts:
-        if os.path.exists(automount):
-            print(f"Exists: {automount}")
-        else:
-            print(f"Does not exist: {automount}")
+    with open(exists_file, 'w') as exists_out, open(not_exists_file, 'w') as not_exists_out:
+        for automount in automounts:
+            if os.path.exists(automount):
+                exists_out.write(f"{automount}\n")
+                print(f"Exists: {automount}")
+            else:
+                not_exists_out.write(f"{automount}\n")
+                print(f"Does not exist: {automount}")
 
 if __name__ == "__main__":
-    input_file = 'automounts.txt'  # Replace with your input file
-    check_automounts(input_file)
+    input_file = 'automounts.txt'  # Input file with paths
+    exists_output = 'exists.txt'   # File to store paths that exist
+    not_exists_output = 'not_exists.txt'  # File to store paths that do not exist
 
+    check_automounts(input_file, exists_output, not_exists_output)
