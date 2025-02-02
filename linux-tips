@@ -1,0 +1,20 @@
+If you want to remove /var/lib/awx/projects/eu/ (including the trailing slash) throughout the file in Vim, use this command:
+:%s#/var/lib/awx/projects/eu/##g
+% → Apply to the entire file.
+s#...#...#g → Substitute globally in each line.
+# → Used as a delimiter to avoid escaping /.
+/var/lib/awx/projects/eu/ → The exact string to remove.
+## → Replaces it with an empty string (removes it).
+g → Replaces all occurrences on each line.
+For confirmation before replacing each match:
+
+ruby
+Copy
+Edit
+:%s#/var/lib/awx/projects/eu/##gc
+Press:
+
+y to confirm replacement.
+n to skip.
+a to replace all occurrences.
+Let me know if you need further refinements! 🚀
