@@ -1,29 +1,21 @@
 import pandas as pd
 
-def extract_package_names(package_list):
-    """Extract only package names, ignoring version numbers."""
-    return {pkg.split('-')[0] for pkg in package_list}
-
 # Load package lists
 rhel7_file = "rhel7_packages.txt"
 rhel8_file = "rhel8_packages.txt"
 
-# Read package lists into sets
+# Read package lists into sets (keeping full package names)
 with open(rhel7_file, "r") as file:
-    rhel7_packages = file.read().splitlines()
+    rhel7_packages = set(file.read().strip().splitlines())
 
 with open(rhel8_file, "r") as file:
-    rhel8_packages = file.read().splitlines()
+    rhel8_packages = set(file.read().strip().splitlines())
 
-# Extract package names
-rhel7_package_names = extract_package_names(rhel7_packages)
-rhel8_package_names = extract_package_names(rhel8_packages)
-
-# Create a comparison list based on RHEL7 only
+# Create a comparison DataFrame with all RHEL7 packages
 data = []
-for package in sorted(rhel7_package_names):
+for package in sorted(rhel7_packages):
     rhel7_value = package
-    rhel8_value = package if package in rhel8_package_names else "Not Installed"
+    rhel8_value = package if package in rhel8_packages else "Not Installed"
     data.append([rhel7_value, rhel8_value])
 
 # Create DataFrame for the output
