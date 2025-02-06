@@ -1,0 +1,38 @@
+import pandas as pd
+
+def extract_package_names(package_list):
+    """Extract only the package names, ignoring version numbers."""
+    return {pkg.split('-')[0] for pkg in package_list}
+
+# Load package lists
+rhel7_file = "rhel7_packages.txt"
+rhel8_file = "rhel8_packages.txt"
+
+# Read package lists into sets
+with open(rhel7_file, "r") as file:
+    rhel7_packages = file.read().splitlines()
+
+with open(rhel8_file, "r") as file:
+    rhel8_packages = file.read().splitlines()
+
+# Extract only package names
+rhel7_package_names = extract_package_names(rhel7_packages)
+rhel8_package_names = extract_package_names(rhel8_packages)
+
+# Create a comprehensive list of all unique package names
+all_packages = sorted(rhel7_package_names.union(rhel8_package_names))
+
+# Build the DataFrame
+data = []
+for package in all_packages:
+    rhel7_value = package if package in rhel7_package_names else "Not Installed"
+    rhel8_value = package if package in rhel8_package_names else "Not Installed"
+    data.append([rhel7_value, rhel8_value])
+
+df = pd.DataFrame(data, columns=["RHEL7 Packages", "RHEL8 Packages"])
+
+# Write to Excel
+output_file = "rpm_comparison_summary.xlsx"
+df.to_excel(output_file, index=False)
+
+print(f"Comparison completed. Results saved in {output_file}.")
