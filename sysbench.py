@@ -2,15 +2,14 @@ import csv
 import subprocess
 import os
 
-def read_hosts_from_csv(csv_file):
-    """Reads the CSV file containing system details."""
+def read_hosts_from_inventory(inventory_file):
+    """Reads the Ansible inventory file and extracts hostnames."""
     hosts = []
-    with open(csv_file, mode='r') as file:
-        reader = csv.reader(file)
-        next(reader)  # Skip header
-        for row in reader:
-            if row:
-                hosts.append(row[0])
+    with open(inventory_file, mode='r') as file:
+        for line in file:
+            line = line.strip()
+            if line and not line.startswith('['):  # Skip group headers
+                hosts.append(line)
     return hosts
 
 def run_ansible_playbook():
@@ -78,8 +77,8 @@ def collect_results(hosts):
         writer.writerows(results)
 
 def main():
-    csv_file = "systems.csv"
-    hosts = read_hosts_from_csv(csv_file)
+    inventory_file = "inventory"
+    hosts = read_hosts_from_inventory(inventory_file)
     run_ansible_playbook()
     collect_results(hosts)
     print("Performance analysis completed. Results saved in sysbench_report.csv")
