@@ -50,3 +50,11 @@ Warning: No results found for hqxsb19-7cs2o282
     with open(f"results/{host}", "r") as f:
          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 FileNotFoundError: [Errno 2] No such file or directory: 'results/hqxsb19-7cs2o282'
+
+
+hqxsb19-7cs2o282 | FAILED! => {
+    "msg": "The task includes an option with an undefined variable. The error was: 'dict object' has no attribute 'hostname'. 'dict object' has no attribute 'hostname'. 'dict object' has no attribute 'hostname'. 'dict object' has no attribute 'hostname'"
+}
+⚠️ Warning: Failed to fetch results: Command '['ansible', 'all', '-i', 'inventory', '-m', 'fetch', '-a', 'src=/tmp/sysbench_cpu_results_{{ ansible_facts.hostname }}.txt dest=results/ flat=yes']' returned non-zero exit status 2.
+✅ Results saved in sysbench_cpu_results.csv
+
