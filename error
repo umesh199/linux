@@ -1,0 +1,2 @@
+FAILED! => {"changed": true, "cmd": "for mode in seqwr seqrd randwr randrd; do\n  sysbench fileio --file-total-size=1G --file-test-mode=$mode run >> /tmp/disk_results_$mode.txt\ndone\n", "delta": "0:00:10.193951", "end": "2025-02-20 20:29:16.686188", "msg": "non-zero return code", "rc": 1, "start": "2025-02-20 20:29:06.492237", "stderr": "", "stderr_lines": [], "stdout": "", "stdout_lines": []}
+
