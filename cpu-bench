@@ -1,85 +1,112 @@
+
+#!/usr/bin/env python3
+
 import csv
 import subprocess
 import os
+import re
 
 INVENTORY_FILE = "inventory"
-CSV_FILE = "cpu_benchmark_results.csv"
+OUTPUT_CSV = "sysbench_cpu_results.csv"
+ANSIBLE_PLAYBOOK = "sysbench_cpu_playbook.yml"
 
-def read_hosts_from_inventory(inventory_file):
-    """Reads the Ansible inventory file and extracts hostnames."""
-    hosts = []
-    with open(inventory_file, mode='r') as file:
-        for line in file:
-            line = line.strip()
-            if line and not line.startswith("["):  # Ignore group headers
-                hosts.append(line)
-    if not hosts:
-        raise ValueError("No valid hosts found in inventory file!")
-    return hosts
+NUM_THREADS = 32  # Number of threads for sysbench
+PRIME_NUMBER_LIMIT = 10000  # Limit for prime number calculations
+TEST_DURATION = 300  # Duration of test in seconds
 
-def create_ansible_playbook():
-    """Creates an Ansible playbook to run the Sysbench CPU benchmark."""
-    playbook_content = """---
+def generate_ansible_playbook():
+    """Creates an Ansible playbook for running sysbench CPU benchmark."""
+    playbook_content = f"""
     - hosts: all
-      gather_facts: no
+      gather_facts: yes
       tasks:
-        - name: Install sysbench (Debian/RHEL)
+        - name: Ensure sysbench is installed
           package:
             name: sysbench
             state: present
 
         - name: Run CPU Benchmark
-          command: sysbench cpu --threads=4 --cpu-max-prime=20000 run
+          command: sysbench cpu --threads={NUM_THREADS} --cpu-max-prime={PRIME_NUMBER_LIMIT} --time={TEST_DURATION} run
           register: cpu_result
 
-        - name: Save Results to File
+        - name: Save Results with Hostname
           copy:
-            content: "{{ cpu_result.stdout }}"
-            dest: /tmp/sysbench_cpu_results.txt
+            content: "Hostname: {{ inventory_hostname }}\\n{{ cpu_result.stdout }}"
+            dest: "/tmp/sysbench_cpu_results_{{ inventory_hostname }}.txt"
     """
-    with open("cpu_benchmark_playbook.yml", "w") as file:
+    
+    with open(ANSIBLE_PLAYBOOK, "w") as file:
         file.write(playbook_content)
 
 def run_ansible_playbook():
-    """Runs the Ansible playbook to execute the benchmark."""
-    subprocess.run(["ansible-playbook", "-i", INVENTORY_FILE, "cpu_benchmark_playbook.yml"], check=True)
+    """Runs the Ansible playbook to execute CPU benchmark tests on remote hosts."""
+    subprocess.run(["ansible-playbook", "-i", INVENTORY_FILE, ANSIBLE_PLAYBOOK], check=True)
 
-def fetch_results(hosts):
-    """Fetches results from remote hosts and saves them in the 'results' directory."""
+def fetch_results():
+    """Fetches results from remote hosts using Ansible fetch module."""
     os.makedirs("results", exist_ok=True)
+    
+    fetch_command = [
+        "ansible", "all", "-i", INVENTORY_FILE, "-m", "fetch", "-a",
+        "src=/tmp/sysbench_cpu_results_{{ inventory_hostname }}.txt dest=results/ flat=yes"
+    ]
+    
+    subprocess.run(fetch_command, check=True)
 
-    for host in hosts:
-        subprocess.run([
-            "ansible", host, "-m", "fetch", "-a",
-            "src=/tmp/sysbench_cpu_results.txt dest=./results/{} flat=yes".format(host)
-        ], check=True)
+def parse_sysbench_output(output):
+    """Extracts relevant performance metrics from sysbench output."""
+    metrics = {
+        "Events Per Second": "N/A",
+        "Total Time (s)": "N/A",
+        "Total Number of Events": "N/A",
+        "Latency (avg)": "N/A"
+    }
 
-def save_results_to_csv(hosts):
-    """Reads fetched results and writes them to a CSV file."""
+    # Regular expressions for extracting relevant details
+    patterns = {
+        "Events Per Second": r"events per second:\s+([\d.]+)",
+        "Total Time (s)": r"total time:\s+([\d.]+)s",
+        "Total Number of Events": r"total number of events:\s+(\d+)",
+        "Latency (avg)": r"avg:\s+([\d.]+)"
+    }
+
+    for key, pattern in patterns.items():
+        match = re.search(pattern, output)
+        if match:
+            metrics[key] = match.group(1)
+
+    return metrics
+
+def parse_results():
+    """Parses fetched results and writes them to a CSV file."""
     results = []
 
-    for host in hosts:
-        result_file = f"results/{host}"
-        if os.path.exists(result_file):
-            with open(result_file, "r") as f:
-                data = f.read().strip()
-                results.append([host, data])
-        else:
-            results.append([host, "No benchmark output"])
+    for filename in os.listdir("results"):
+        hostname = filename.replace("sysbench_cpu_results_", "").replace(".txt", "")
+        filepath = os.path.join("results", filename)
 
-    with open(CSV_FILE, mode='w', newline='') as file:
+        with open(filepath, "r") as file:
+            data = file.read()
+            metrics = parse_sysbench_output(data)
+            results.append([
+                hostname, NUM_THREADS, PRIME_NUMBER_LIMIT,
+                metrics["Events Per Second"], metrics["Total Time (s)"],
+                metrics["Total Number of Events"], metrics["Latency (avg)"]
+            ])
+
+    with open(OUTPUT_CSV, mode="w", newline="") as file:
         writer = csv.writer(file)
-        writer.writerow(["Host", "CPU Benchmark Result"])
+        writer.writerow(["Hostname", "Number of Threads", "Prime Number Limit",
+                         "Events Per Second", "Total Time (s)", 
+                         "Total Number of Events", "Latency (avg)"])
         writer.writerows(results)
 
-    print(f"CPU Benchmark results saved in {CSV_FILE}")
-
 def main():
-    hosts = read_hosts_from_inventory(INVENTORY_FILE)
-    create_ansible_playbook()
+    generate_ansible_playbook()
     run_ansible_playbook()
-    fetch_results(hosts)
-    save_results_to_csv(hosts)
+    fetch_results()
+    parse_results()
+    print(f"✅ CPU benchmarking completed. Results saved in {OUTPUT_CSV}")
 
 if __name__ == "__main__":
     main()
