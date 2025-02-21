@@ -1,0 +1,109 @@
+import csv
+import subprocess
+import os
+
+INVENTORY_FILE = "inventory"
+PLAYBOOK_FILE = "cpu_benchmark_playbook.yml"
+RESULTS_DIR = "results"
+CSV_FILE = "cpu_benchmark_results.csv"
+
+def read_hosts_from_inventory(inventory_file):
+    """Reads Ansible inventory and extracts hostnames."""
+    hosts = []
+    with open(inventory_file, "r") as file:
+        for line in file:
+            line = line.strip()
+            if line and not line.startswith("["):  # Skip group headers
+                hosts.append(line)
+    
+    if not hosts:
+        raise ValueError("No valid hosts found in inventory file!")
+    
+    return hosts
+
+def create_ansible_playbook():
+    """Creates an Ansible playbook for running CPU benchmarks."""
+    playbook_content = """
+    - hosts: all
+      gather_facts: no
+      tasks:
+        - name: Install sysbench (Debian/RHEL)
+          package:
+            name: sysbench
+            state: present
+
+        - name: Run CPU Benchmark
+          command: sysbench cpu --threads=4 --cpu-max-prime=20000 run
+          register: cpu_result
+
+        - name: Print CPU Benchmark Output
+          debug:
+            var: cpu_result.stdout
+
+        - name: Save Results to File
+          copy:
+            content: "{{ cpu_result.stdout }}"
+            dest: /tmp/sysbench_cpu_results.txt
+    """
+    
+    with open(PLAYBOOK_FILE, "w") as file:
+        file.write(playbook_content)
+    
+    print("✅ Ansible playbook created.")
+
+def run_ansible_playbook():
+    """Executes the Ansible playbook."""
+    try:
+        subprocess.run(["ansible-playbook", "-i", INVENTORY_FILE, PLAYBOOK_FILE], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error running playbook: {e}")
+        exit(1)
+
+def fetch_results(hosts):
+    """Fetches benchmark results from remote hosts."""
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+
+    for host in hosts:
+        try:
+            subprocess.run([
+                "ansible", host, "-m", "fetch", "-a", 
+                f"src=/tmp/sysbench_cpu_results.txt dest={RESULTS_DIR}/{host} flat=yes"
+            ], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️ Warning: Failed to fetch results from {host}: {e}")
+
+def save_results_to_csv(hosts):
+    """Reads fetched results and writes them to a CSV file."""
+    results = []
+
+    for host in hosts:
+        result_file = f"{RESULTS_DIR}/{host}"
+        if os.path.exists(result_file):
+            with open(result_file, "r") as f:
+                data = f.read().strip()
+                results.append([host, data])
+        else:
+            print(f"⚠️ Warning: No benchmark output found for {host}")
+            results.append([host, "No benchmark output"])
+
+    with open(CSV_FILE, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Host", "CPU Benchmark Result"])
+        writer.writerows(results)
+
+    print(f"✅ CPU Benchmark results saved in {CSV_FILE}")
+
+def main():
+    """Main function to execute all tasks."""
+    try:
+        hosts = read_hosts_from_inventory(INVENTORY_FILE)
+        create_ansible_playbook()
+        run_ansible_playbook()
+        fetch_results(hosts)
+        save_results_to_csv(hosts)
+        print("🚀 CPU Benchmarking complete!")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+if __name__ == "__main__":
+    main()
