@@ -1,0 +1,85 @@
+import csv
+import subprocess
+import os
+
+def read_hosts_from_inventory(inventory_file):
+    """Reads the Ansible inventory file and extracts hostnames."""
+    hosts = []
+    with open(inventory_file, mode='r') as file:
+        for line in file:
+            line = line.strip()
+            if line and not line.startswith('['):  # Skip group headers
+                hosts.append(line)
+    if not hosts:
+        raise ValueError("No valid hosts found in inventory file!")
+    return hosts
+
+def run_ansible_playbook():
+    """Runs an Ansible playbook to execute sysbench tests on remote hosts."""
+    playbook_content = """
+    - hosts: all
+      gather_facts: yes
+      tasks:
+        - name: Install sysbench (Debian/RHEL)
+          package:
+            name: sysbench
+            state: present
+
+        - name: Get CPU Core Count
+          command: nproc
+          register: cpu_cores
+
+        - name: Run CPU Benchmark
+          command: sysbench cpu --threads=1 --cpu-max-prime=10000 run
+          register: cpu_result
+
+        - name: Run Memory Benchmark
+          command: sysbench memory run
+          register: memory_result
+
+        - name: Save Results to File
+          copy:
+            content: "CPU:\n{{ cpu_result.stdout }}\nMemory:\n{{ memory_result.stdout }}"
+            dest: /tmp/sysbench_results.txt
+    """
+    with open("sysbench_playbook.yml", "w") as file:
+        file.write(playbook_content)
+    
+    subprocess.run(["ansible-playbook", "-i", "inventory", "sysbench_playbook.yml"], check=True)
+
+def collect_results(hosts):
+    """Fetches results from remote hosts and writes them to a CSV file."""
+    results = []
+    os.makedirs("results", exist_ok=True)
+    
+    for host in hosts:
+        subprocess.run([
+            "ansible", host, "-m", "fetch", "-a", 
+            "src=/tmp/sysbench_results.txt dest=./results/{} flat=yes".format(host)
+        ], check=True)
+        
+        result_file = f"results/{host}"
+        if os.path.exists(result_file):
+            with open(result_file, "r") as f:
+                data = f.read()
+                results.append([host, data])
+        else:
+            print(f"Warning: No results found for {host}")
+    
+    report_file = "sysbench_report.csv"
+    with open(report_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Host", "Benchmark Results"])
+        writer.writerows(results)
+    
+    return report_file
+
+def main():
+    inventory_file = "inventory"
+    hosts = read_hosts_from_inventory(inventory_file)
+    run_ansible_playbook()
+    report_file = collect_results(hosts)
+    print("Performance analysis completed. Results saved in", report_file)
+
+if __name__ == "__main__":
+    main()
