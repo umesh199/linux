@@ -58,3 +58,9 @@ hqxsb19-7cs2o282 | FAILED! => {
 ⚠️ Warning: Failed to fetch results: Command '['ansible', 'all', '-i', 'inventory', '-m', 'fetch', '-a', 'src=/tmp/sysbench_cpu_results_{{ ansible_facts.hostname }}.txt dest=results/ flat=yes']' returned non-zero exit status 2.
 ✅ Results saved in sysbench_cpu_results.csv
 
+
+Hostname,Number of Threads,Prime Number Limit,Events Per Second,Total Time (s),Total Number of Events,Latency (avg)
+sysbench_cpu_results,32,10000,49931.46,300.0007,14979536,0.64
+hqxsb19-7cs2o282,32,10000,49927.67,300.0006,14978397,0.64
+sysbench_memory_results_hqxsb19-7cs2o282,32,10000,N/A,10.0001,63126436,0.00
+
