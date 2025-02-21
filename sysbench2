@@ -1,14 +1,6 @@
 import csv
 import subprocess
 import os
-from office365.sharepoint.client_context import ClientContext
-from office365.runtime.auth.client_credential import ClientCredential
-
-# SharePoint Configuration
-SHAREPOINT_SITE_URL = "https://yourtenant.sharepoint.com/sites/YourSite"
-SHAREPOINT_FOLDER = "Shared Documents/PerformanceReports"
-CLIENT_ID = "your-client-id"
-CLIENT_SECRET = "your-client-secret"
 
 def read_hosts_from_inventory(inventory_file):
     """Reads the Ansible inventory file and extracts hostnames."""
@@ -106,21 +98,12 @@ def collect_results(hosts):
     
     return report_file
 
-def upload_to_sharepoint(file_path):
-    """Uploads the given file to SharePoint."""
-    ctx = ClientContext(SHAREPOINT_SITE_URL).with_credentials(ClientCredential(CLIENT_ID, CLIENT_SECRET))
-    target_folder = ctx.web.get_folder_by_server_relative_url(SHAREPOINT_FOLDER)
-    with open(file_path, "rb") as file_content:
-        target_folder.upload_file(os.path.basename(file_path), file_content).execute_query()
-    print("Uploaded report to SharePoint successfully.")
-
 def main():
     inventory_file = "inventory"
     hosts = read_hosts_from_inventory(inventory_file)
     run_ansible_playbook()
     report_file = collect_results(hosts)
-    upload_to_sharepoint(report_file)
-    print("Performance analysis completed. Results saved and uploaded to SharePoint.")
+    print("Performance analysis completed. Results saved in sysbench_report.csv")
 
 if __name__ == "__main__":
     main()
