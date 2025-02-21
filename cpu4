@@ -1,0 +1,66 @@
+import csv
+import subprocess
+import os
+
+INVENTORY_FILE = "inventory"
+OUTPUT_CSV = "sysbench_cpu_results.csv"
+NUM_THREADS = 32  # Adjust based on your system's core count
+TEST_DURATION = 300  # Test duration in seconds
+
+def run_ansible_playbook():
+    """Runs an Ansible playbook to execute sysbench CPU tests on remote hosts."""
+    playbook_content = """
+    - hosts: all
+      gather_facts: yes
+      tasks:
+        - name: Ensure sysbench is installed
+          package:
+            name: sysbench
+            state: present
+
+        - name: Run CPU Benchmark
+          command: sysbench cpu --threads={} --time={} run
+          register: cpu_result
+
+        - name: Save Results with Hostname
+          copy:
+            content: "Hostname: {{ ansible_hostname }}\n{{ cpu_result.stdout }}"
+            dest: "/tmp/sysbench_cpu_results_{{ ansible_hostname }}.txt"
+    """.format(NUM_THREADS, TEST_DURATION)
+    
+    with open("sysbench_playbook.yml", "w") as file:
+        file.write(playbook_content)
+    
+    subprocess.run(["ansible-playbook", "-i", INVENTORY_FILE, "sysbench_playbook.yml"], check=True)
+
+def collect_results():
+    """Fetches results from remote hosts and writes them to a CSV file."""
+    os.makedirs("results", exist_ok=True)
+    
+    subprocess.run([
+        "ansible", "all", "-i", INVENTORY_FILE, "-m", "fetch", "-a", 
+        "src=/tmp/sysbench_cpu_results_{{ ansible_hostname }}.txt dest=results/ flat=yes"
+    ], check=True)
+    
+    results = []
+    for filename in os.listdir("results"):
+        filepath = os.path.join("results", filename)
+        if os.path.isfile(filepath):
+            with open(filepath, "r") as file:
+                data = file.read()
+                hostname = filename  # Hostname is the filename
+                results.append([hostname, data])
+    
+    with open(OUTPUT_CSV, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Hostname", "Benchmark Results"])
+        writer.writerows(results)
+    
+    print(f"✅ Results saved in {OUTPUT_CSV}")
+
+def main():
+    run_ansible_playbook()
+    collect_results()
+
+if __name__ == "__main__":
+    main()
