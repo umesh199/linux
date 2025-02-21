@@ -11,3 +11,35 @@ Traceback (most recent call last):
     raise CalledProcessError(retcode, process.args,
 subprocess.CalledProcessError: Command '['ansible-playbook', '-i', 'inventory', 'sysbench_playbook.yml']' returned non-zero exit status 2.
 atal: [hqxsb19-7cs2o282]: FAILED! => {"changed": false, "cmd": "mkdir -p /tmp/sysbench_test_files\nsysbench fileio --file-total-size=1G --file-num=64 prepare\n", "delta": null, "end": null, "msg": "Unable to change directory before execution: [Errno 2] No such file or directory: '/tmp/sysbench_test_files'", "rc": null, "start": null, "stderr": "", "stderr_lines": [], "stdout": "", "stdout_lines": []}
+
+
+TASK [Run Disk I/O Test] ******************************************************************************************************************************************************************************************
+fatal: [hqxsb19-7cs2o282]: FAILED! => {"changed": true, "cmd": "for mode in seqwr seqrd randwr randrd; do\n  sysbench fileio --file-total-size=1G --file-test-mode=$mode run >> /tmp/disk_results_$mode.txt\ndone\n", "delta": "0:00:20.365712", "end": "2025-02-20 21:12:56.817560", "msg": "non-zero return code", "rc": 1, "start": "2025-02-20 21:12:36.451848", "stderr": "", "stderr_lines": [], "stdout": "", "stdout_lines": []}
+...ignoring
+
+TASK [Debug Disk I/O Test] ****************************************************************************************************************************************************************************************
+ok: [hqxsb19-7cs2o282] => {
+    "disk_result.stdout_lines": []
+}
+
+TASK [Cleanup Disk Test Files] ************************************************************************************************************************************************************************************
+changed: [hqxsb19-7cs2o282]
+
+TASK [Save Results to File] ***************************************************************************************************************************************************************************************
+changed: [hqxsb19-7cs2o282]
+
+PLAY RECAP ********************************************************************************************************************************************************************************************************
+hqxsb19-7cs2o282           : ok=12   changed=7    unreachable=0    failed=0    skipped=0    rescued=0    ignored=1   
+
+[WARNING]: provided hosts list is empty, only localhost is available. Note that the implicit localhost does not match 'all'
+[WARNING]: Could not match supplied host pattern, ignoring: hqxsb19-7cs2o282
+Traceback (most recent call last):
+  File "/root/genral-python-scripts/sysbench/./sysbench3.py", line 128, in <module>
+    main()
+  File "/root/genral-python-scripts/sysbench/./sysbench3.py", line 124, in main
+    report_file = collect_results(hosts)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/genral-python-scripts/sysbench/./sysbench3.py", line 108, in collect_results
+    with open(f"results/{host}", "r") as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'results/hqxsb19-7cs2o282'
