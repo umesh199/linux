@@ -10,3 +10,4 @@ Traceback (most recent call last):
   File "/usr/local/python312/lib/python3.12/subprocess.py", line 571, in run
     raise CalledProcessError(retcode, process.args,
 subprocess.CalledProcessError: Command '['ansible-playbook', '-i', 'inventory', 'sysbench_playbook.yml']' returned non-zero exit status 2.
+atal: [hqxsb19-7cs2o282]: FAILED! => {"changed": false, "cmd": "mkdir -p /tmp/sysbench_test_files\nsysbench fileio --file-total-size=1G --file-num=64 prepare\n", "delta": null, "end": null, "msg": "Unable to change directory before execution: [Errno 2] No such file or directory: '/tmp/sysbench_test_files'", "rc": null, "start": null, "stderr": "", "stderr_lines": [], "stdout": "", "stdout_lines": []}
