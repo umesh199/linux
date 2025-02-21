@@ -1,0 +1,126 @@
+import csv
+import subprocess
+import os
+from office365.sharepoint.client_context import ClientContext
+from office365.runtime.auth.client_credential import ClientCredential
+
+# SharePoint Configuration
+SHAREPOINT_SITE_URL = "https://yourtenant.sharepoint.com/sites/YourSite"
+SHAREPOINT_FOLDER = "Shared Documents/PerformanceReports"
+CLIENT_ID = "your-client-id"
+CLIENT_SECRET = "your-client-secret"
+
+def read_hosts_from_inventory(inventory_file):
+    """Reads the Ansible inventory file and extracts hostnames."""
+    hosts = []
+    with open(inventory_file, mode='r') as file:
+        for line in file:
+            line = line.strip()
+            if line and not line.startswith('['):  # Skip group headers
+                hosts.append(line)
+    return hosts
+
+def run_ansible_playbook():
+    """Runs an Ansible playbook to execute sysbench tests on remote hosts."""
+    playbook_content = """
+    - hosts: all
+      gather_facts: yes
+      become: yes
+      tasks:
+        - name: Install sysbench (Debian/RHEL)
+          package:
+            name: sysbench
+            state: present
+
+        - name: Get CPU Core Count
+          command: nproc
+          register: cpu_cores
+
+        - name: Run CPU Benchmark
+          shell: |
+            for cores in $(seq 1 {{ cpu_cores.stdout }}); do
+              sysbench cpu --threads=$cores --cpu-max-prime=20000 run >> /tmp/cpu_results_$cores.txt
+            done
+          register: cpu_result
+
+        - name: Run Memory Benchmark
+          command: sysbench memory run
+          register: memory_result
+
+        - name: Ensure sysbench test directory exists
+          file:
+            path: /tmp/sysbench_test_files
+            state: directory
+            mode: '0755'
+
+        - name: Prepare Disk Benchmark
+          shell: sysbench fileio --file-total-size=1G --file-num=64 prepare
+          args:
+            chdir: /tmp/sysbench_test_files
+          register: disk_prepare_result
+
+        - name: Run Disk I/O Test
+          shell: |
+            for mode in seqwr seqrd randwr randrd; do
+              sysbench fileio --file-total-size=1G --file-test-mode=$mode run >> /tmp/disk_results_$mode.txt
+            done
+          args:
+            chdir: /tmp/sysbench_test_files
+          register: disk_result
+
+        - name: Cleanup Disk Test Files
+          shell: sysbench fileio cleanup
+          args:
+            chdir: /tmp/sysbench_test_files
+
+        - name: Save Results to File
+          copy:
+            content: "CPU:\n{{ cpu_result.stdout }}\nMemory:\n{{ memory_result.stdout }}\nDisk:\n{{ disk_result.stdout }}"
+            dest: /tmp/sysbench_results.txt
+    """
+    with open("sysbench_playbook.yml", "w") as file:
+        file.write(playbook_content)
+    
+    subprocess.run(["ansible-playbook", "-i", "inventory", "sysbench_playbook.yml"], check=True)
+
+def collect_results(hosts):
+    """Fetches results from remote hosts and writes them to a CSV file."""
+    results = []
+    os.makedirs("results", exist_ok=True)
+    
+    for host in hosts:
+        subprocess.run([
+            "ansible", host, "-m", "fetch", "-a", 
+            "src=/tmp/sysbench_results.txt dest=./results/{} flat=yes".format(host)
+        ], check=True)
+        
+        with open(f"results/{host}", "r") as f:
+            data = f.read()
+            results.append([host, data])
+    
+    report_file = "sysbench_report.csv"
+    with open(report_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Host", "Benchmark Results"])
+        writer.writerows(results)
+    
+    return report_file
+
+def upload_to_sharepoint(file_path):
+    """Uploads the given file to SharePoint."""
+    ctx = ClientContext(SHAREPOINT_SITE_URL).with_credentials(ClientCredential(CLIENT_ID, CLIENT_SECRET))
+    target_folder = ctx.web.get_folder_by_server_relative_url(SHAREPOINT_FOLDER)
+    with open(file_path, "rb") as file_content:
+        target_folder.upload_file(os.path.basename(file_path), file_content).execute_query()
+    print("Uploaded report to SharePoint successfully.")
+
+def main():
+    inventory_file = "inventory"
+    hosts = read_hosts_from_inventory(inventory_file)
+    run_ansible_playbook()
+    report_file = collect_results(hosts)
+    upload_to_sharepoint(report_file)
+    print("Performance analysis completed. Results saved and uploaded to SharePoint.")
+
+if __name__ == "__main__":
+    main()
