@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+
+import csv
+import subprocess
+import os
+
+INVENTORY_FILE = "inventory"
+OUTPUT_CSV = "sysbench_memory_results.csv"
+ANSIBLE_PLAYBOOK = "sysbench_memory_playbook.yml"
+
+def generate_ansible_playbook():
+    """Creates an Ansible playbook for running sysbench memory test."""
+    playbook_content = """
+    - hosts: all
+      gather_facts: yes
+      tasks:
+        - name: Install sysbench
+          package:
+            name: sysbench
+            state: present
+
+        - name: Run memory benchmark
+          command: sysbench memory run
+          register: memory_result
+
+        - name: Save memory benchmark result
+          copy:
+            content: "{{ memory_result.stdout }}"
+            dest: "/tmp/sysbench_memory_results_{{ inventory_hostname }}.txt"
+    """
+    
+    with open(ANSIBLE_PLAYBOOK, "w") as file:
+        file.write(playbook_content)
+
+def run_ansible_playbook():
+    """Runs the Ansible playbook to execute memory benchmark tests on remote hosts."""
+    subprocess.run(["ansible-playbook", "-i", INVENTORY_FILE, ANSIBLE_PLAYBOOK], check=True)
+
+def fetch_results():
+    """Fetches results from remote hosts using Ansible fetch module."""
+    os.makedirs("results", exist_ok=True)
+    
+    fetch_command = [
+        "ansible", "all", "-i", INVENTORY_FILE, "-m", "fetch", "-a",
+        "src=/tmp/sysbench_memory_results_{{ inventory_hostname }}.txt dest=results/ flat=yes"
+    ]
+    
+    subprocess.run(fetch_command, check=True)
+
+def parse_results():
+    """Parses fetched results and writes them to a CSV file."""
+    results = []
+    
+    for filename in os.listdir("results"):
+        hostname = filename.replace("sysbench_memory_results_", "").replace(".txt", "")
+        filepath = os.path.join("results", filename)
+        
+        with open(filepath, "r") as file:
+            data = file.read()
+            results.append([hostname, data])
+    
+    with open(OUTPUT_CSV, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Hostname", "Memory Benchmark Results"])
+        writer.writerows(results)
+
+def main():
+    generate_ansible_playbook()
+    run_ansible_playbook()
+    fetch_results()
+    parse_results()
+    print(f"✅ Memory benchmarking completed. Results saved in {OUTPUT_CSV}")
+
+if __name__ == "__main__":
+    main()
