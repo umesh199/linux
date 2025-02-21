@@ -1,0 +1,119 @@
+import csv
+import subprocess
+import os
+
+INVENTORY_FILE = "inventory"
+OUTPUT_CSV = "sysbench_cpu_results.csv"
+NUM_THREADS = 32
+TEST_DURATION = 300
+
+def run_ansible_playbook():
+    """Runs an Ansible playbook to execute sysbench CPU tests and collect CPU details."""
+    playbook_content = f"""
+    - hosts: all
+      gather_facts: yes
+      tasks:
+        - name: Ensure sysbench is installed
+          package:
+            name: sysbench
+            state: present
+
+        - name: Gather CPU details
+          shell: >
+            echo "CPU Cores: $(lscpu | grep '^CPU(s):' | awk '{{print $2}}')" &&
+            echo "CPU Speed: $(lscpu | grep 'MHz' | awk '{{print $3}}')" &&
+            echo "CPU Model: $(lscpu | grep 'Model name' | cut -d':' -f2 | xargs)"
+          register: cpu_info
+
+        - name: Run CPU Benchmark
+          shell: sysbench cpu --threads={NUM_THREADS} --time={TEST_DURATION} run | tee /tmp/sysbench_cpu_results_{{{{ inventory_hostname }}}}.txt
+          args:
+            executable: /bin/bash
+          register: cpu_benchmark
+
+        - name: Save CPU Details and Benchmark Results
+          copy:
+            content: |
+              Hostname: {{{{ inventory_hostname }}}}
+              {{{{ cpu_info.stdout }}}}
+              {{{{ cpu_benchmark.stdout }}}}
+            dest: "/tmp/sysbench_cpu_results_{{{{ inventory_hostname }}}}.txt"
+
+        - name: Verify file exists before fetching
+          stat:
+            path: "/tmp/sysbench_cpu_results_{{{{ inventory_hostname }}}}.txt"
+          register: file_stat
+
+        - name: Fail if file does not exist
+          fail:
+            msg: "Sysbench results file was not created!"
+          when: not file_stat.stat.exists
+    """
+    
+    with open("sysbench_playbook.yml", "w") as file:
+        file.write(playbook_content)
+    
+    subprocess.run(["ansible-playbook", "-i", INVENTORY_FILE, "sysbench_playbook.yml"], check=True)
+
+def collect_results():
+    """Fetches results from remote hosts and writes them to a CSV file."""
+    os.makedirs("results", exist_ok=True)
+    
+    subprocess.run([
+        "ansible", "all", "-i", INVENTORY_FILE, "-m", "fetch", "-a",
+        "src=/tmp/sysbench_cpu_results_{{ inventory_hostname }}.txt dest=results/ flat=yes"
+    ], check=True)
+
+def parse_results():
+    """Extracts relevant sysbench and CPU details, then saves to a CSV file."""
+    results = []
+    for filename in os.listdir("results"):
+        filepath = os.path.join("results", filename)
+        if os.path.isfile(filepath):
+            with open(filepath, "r") as file:
+                data = file.readlines()
+
+            # Extract information
+            hostname = filename.replace("sysbench_cpu_results_", "").replace(".txt", "")
+            metrics = {"Hostname": hostname, "Number of Threads": NUM_THREADS}
+            
+            for line in data:
+                if "CPU Cores:" in line:
+                    metrics["Number of Cores"] = line.split(":")[1].strip()
+                if "CPU Speed:" in line:
+                    metrics["CPU Speed (MHz)"] = line.split(":")[1].strip()
+                if "CPU Model:" in line:
+                    metrics["CPU Model"] = line.split(":")[1].strip()
+                if "Prime numbers limit:" in line:
+                    metrics["Prime Number Limit"] = line.split(":")[1].strip()
+                if "events per second:" in line:
+                    metrics["Events Per Second"] = line.split(":")[1].strip()
+                if "total time:" in line:
+                    metrics["Total Time (s)"] = line.split(":")[1].strip().replace("s", "")
+                if "total number of events:" in line:
+                    metrics["Total Number of Events"] = line.split(":")[1].strip()
+                if "avg:" in line and "latency" in line:
+                    metrics["Latency (avg)"] = line.split(":")[1].strip()
+
+            results.append(metrics)
+
+    # Write to CSV
+    with open(OUTPUT_CSV, mode='w', newline='') as file:
+        fieldnames = [
+            "Hostname", "Number of Cores", "CPU Speed (MHz)", "CPU Model",
+            "Number of Threads", "Prime Number Limit", "Events Per Second",
+            "Total Time (s)", "Total Number of Events", "Latency (avg)"
+        ]
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results)
+    
+    print(f"✅ Results saved in {OUTPUT_CSV}")
+
+def main():
+    run_ansible_playbook()
+    collect_results()
+    parse_results()
+
+if __name__ == "__main__":
+    main()
