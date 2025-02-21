@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+import subprocess
+import csv
+import os
+
+# Configuration
+INVENTORY_FILE = "inventory"
+PLAYBOOK_FILE = "cpu_benchmark_playbook.yml"
+RESULTS_DIR = "results"
+OUTPUT_FILE = "sysbench_cpu_results.csv"
+
+# Sysbench parameters
+NUM_THREADS = 32  
+TEST_DURATION = 300  
+
+def create_ansible_playbook():
+    """Generates an Ansible playbook to run sysbench and save the hostname."""
+    playbook_content = f"""
+    - hosts: all
+      gather_facts: yes
+      tasks:
+        - name: Install sysbench
+          package:
+            name: sysbench
+            state: present
+
+        - name: Run CPU Benchmark
+          command: sysbench cpu --threads={NUM_THREADS} --time={TEST_DURATION} run
+          register: cpu_result
+
+        - name: Save Results with Hostname
+          copy:
+            content: "Hostname: {{{{ ansible_facts.hostname }}}}\\n{{{{ cpu_result.stdout }}}}"
+            dest: /tmp/sysbench_cpu_results_{{{{ ansible_facts.hostname }}}}.txt
+    """
+    
+    with open(PLAYBOOK_FILE, "w") as file:
+        file.write(playbook_content)
+    
+    print("✅ Ansible playbook created.")
+
+def run_ansible_playbook():
+    """Runs the Ansible playbook."""
+    try:
+        subprocess.run(["ansible-playbook", "-i", INVENTORY_FILE, PLAYBOOK_FILE], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error running playbook: {e}")
+        exit(1)
+
+def fetch_results():
+    """Fetches benchmark results from all remote hosts."""
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+
+    try:
+        subprocess.run([
+            "ansible", "all", "-i", INVENTORY_FILE, "-m", "fetch", "-a", 
+            f"src=/tmp/sysbench_cpu_results_{{{{ ansible_facts.hostname }}}}.txt dest={RESULTS_DIR}/ flat=yes"
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️ Warning: Failed to fetch results: {e}")
+
+def parse_sysbench_output(output):
+    """Extracts key performance metrics from sysbench output."""
+    metrics = {}
+    lines = output.splitlines()
+    
+    # Extract hostname
+    metrics["Host"] = "Unknown"
+    if lines and lines[0].startswith("Hostname:"):
+        metrics["Host"] = lines[0].split(":")[1].strip()
+        lines = lines[1:]  # Remove the hostname line from processing
+    
+    for line in lines:
+        if "total time:" in line:
+            metrics["Total Time (s)"] = line.split(":")[1].strip().replace("s", "")
+        if "total number of events:" in line:
+            metrics["Total Events"] = line.split(":")[1].strip()
+        if "execution time (avg/stddev):" in line:
+            metrics["Execution Time (ms)"] = line.split(":")[1].strip()
+        if "events per second:" in line:
+            metrics["Events Per Second"] = line.split(":")[1].strip()
+    return metrics
+
+def save_results_to_csv():
+    """Reads fetched results and writes them to a CSV file."""
+    results = []
+
+    for filename in os.listdir(RESULTS_DIR):
+        filepath = os.path.join(RESULTS_DIR, filename)
+
+        if os.path.exists(filepath):
+            with open(filepath, "r") as file:
+                data = file.read().strip()
+                parsed_data = parse_sysbench_output(data)
+                results.append(parsed_data)
+        else:
+            print(f"⚠️ Warning: No benchmark output found for {filename}")
+            results.append({"Host": filename, "Total Time (s)": "N/A", "Total Events": "N/A", "Execution Time (ms)": "N/A", "Events Per Second": "N/A"})
+
+    fieldnames = ["Host", "Total Time (s)", "Total Events", "Execution Time (ms)", "Events Per Second"]
+    
+    with open(OUTPUT_FILE, mode='w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results)
+
+    print(f"✅ Results saved in {OUTPUT_FILE}")
+
+def main():
+    """Main function to execute all steps."""
+    create_ansible_playbook()
+    run_ansible_playbook()
+    fetch_results()
+    save_results_to_csv()
+    print("🚀 CPU Benchmarking complete!")
+
+if __name__ == "__main__":
+    main()
