@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+
+import csv
+import subprocess
+import os
+import re
+
+INVENTORY_FILE = "inventory"
+OUTPUT_CSV = "sysbench_memory_results.csv"
+ANSIBLE_PLAYBOOK = "sysbench_memory_playbook.yml"
+
+NUM_THREADS = 32  # Number of threads for sysbench
+MEM_BLOCK_SIZE = "1M"  # Block size for memory test
+MEM_TOTAL_SIZE = "10G"  # Total memory to read/write
+
+def generate_ansible_playbook():
+    """Creates an Ansible playbook for running sysbench memory benchmark."""
+    playbook_content = f"""
+    - hosts: all
+      gather_facts: yes
+      tasks:
+        - name: Ensure sysbench is installed
+          package:
+            name: sysbench
+            state: present
+
+        - name: Run Memory Benchmark
+          command: sysbench memory --threads={NUM_THREADS} --memory-block-size={MEM_BLOCK_SIZE} --memory-total-size={MEM_TOTAL_SIZE} run
+          register: memory_result
+
+        - name: Save Results with Hostname
+          copy:
+            content: "Hostname: {{ inventory_hostname }}\\n{{ memory_result.stdout }}"
+            dest: "/tmp/sysbench_memory_results_{{ inventory_hostname }}.txt"
+    """
+    
+    with open(ANSIBLE_PLAYBOOK, "w") as file:
+        file.write(playbook_content)
+
+def run_ansible_playbook():
+    """Runs the Ansible playbook to execute memory benchmark tests on remote hosts."""
+    subprocess.run(["ansible-playbook", "-i", INVENTORY_FILE, ANSIBLE_PLAYBOOK], check=True)
+
+def fetch_results():
+    """Fetches results from remote hosts using Ansible fetch module."""
+    os.makedirs("results", exist_ok=True)
+    
+    fetch_command = [
+        "ansible", "all", "-i", INVENTORY_FILE, "-m", "fetch", "-a",
+        "src=/tmp/sysbench_memory_results_{{ inventory_hostname }}.txt dest=results/ flat=yes"
+    ]
+    
+    subprocess.run(fetch_command, check=True)
+
+def parse_sysbench_output(output):
+    """Extracts relevant performance metrics from sysbench memory output."""
+    metrics = {
+        "Transfer Speed (MiB/s)": "N/A",
+        "Total Time (s)": "N/A",
+        "Total Number of Events": "N/A",
+        "Latency (avg)": "N/A"
+    }
+
+    # Regular expressions for extracting relevant details
+    patterns = {
+        "Transfer Speed (MiB/s)": r"transferred \(([\d.]+) MiB/sec\)",
+        "Total Time (s)": r"total time:\s+([\d.]+)s",
+        "Total Number of Events": r"total number of events:\s+(\d+)",
+        "Latency (avg)": r"avg:\s+([\d.]+)"
+    }
+
+    for key, pattern in patterns.items():
+        match = re.search(pattern, output)
+        if match:
+            metrics[key] = match.group(1)
+
+    return metrics
+
+def parse_results():
+    """Parses fetched results and writes them to a CSV file."""
+    results = []
+
+    for filename in os.listdir("results"):
+        if not filename.startswith("sysbench_memory_results_"):  # Ignore non-memory results
+            continue
+
+        hostname = filename.replace("sysbench_memory_results_", "").replace(".txt", "")
+        filepath = os.path.join("results", filename)
+
+        with open(filepath, "r") as file:
+            data = file.read()
+            metrics = parse_sysbench_output(data)
+            results.append([
+                hostname, NUM_THREADS, MEM_BLOCK_SIZE, MEM_TOTAL_SIZE,
+                metrics["Transfer Speed (MiB/s)"], metrics["Total Time (s)"],
+                metrics["Total Number of Events"], metrics["Latency (avg)"]
+            ])
+
+    with open(OUTPUT_CSV, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Hostname", "Number of Threads", "Memory Block Size", "Memory Total Size",
+                         "Transfer Speed (MiB/s)", "Total Time (s)", 
+                         "Total Number of Events", "Latency (avg)"])
+        writer.writerows(results)
+
+def main():
+    generate_ansible_playbook()
+    run_ansible_playbook()
+    fetch_results()
+    parse_results()
+    print(f"✅ Memory benchmarking completed. Results saved in {OUTPUT_CSV}")
+
+if __name__ == "__main__":
+    main()
