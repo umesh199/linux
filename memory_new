@@ -1,0 +1,114 @@
+import csv
+import subprocess
+import os
+
+INVENTORY_FILE = "inventory"
+OUTPUT_CSV = "sysbench_memory_results.csv"
+NUM_THREADS = 32
+TEST_DURATION = 10  # 10 seconds test
+
+def run_ansible_playbook():
+    """Runs an Ansible playbook to execute sysbench memory tests and collect system details."""
+    playbook_content = f"""
+    - hosts: all
+      gather_facts: yes
+      tasks:
+        - name: Ensure sysbench is installed
+          package:
+            name: sysbench
+            state: present
+
+        - name: Gather CPU and Memory details
+          shell: >
+            echo "CPU Cores: $(lscpu | grep '^CPU(s):' | awk '{{print $2}}')" &&
+            echo "Total Memory: $(free -m | awk '/^Mem:/' '{{print $2}}') MB"
+          register: system_info
+
+        - name: Run Memory Benchmark
+          shell: sysbench memory --threads={NUM_THREADS} run | tee /tmp/sysbench_memory_results_{{{{ inventory_hostname }}}}.txt
+          args:
+            executable: /bin/bash
+          register: memory_benchmark
+
+        - name: Save System Details and Benchmark Results
+          copy:
+            content: |
+              Hostname: {{{{ inventory_hostname }}}}
+              {{{{ system_info.stdout }}}}
+              {{{{ memory_benchmark.stdout }}}}
+            dest: "/tmp/sysbench_memory_results_{{{{ inventory_hostname }}}}.txt"
+
+        - name: Verify file exists before fetching
+          stat:
+            path: "/tmp/sysbench_memory_results_{{{{ inventory_hostname }}}}.txt"
+          register: file_stat
+
+        - name: Fail if file does not exist
+          fail:
+            msg: "Sysbench results file was not created!"
+          when: not file_stat.stat.exists
+    """
+    
+    with open("sysbench_memory_playbook.yml", "w") as file:
+        file.write(playbook_content)
+    
+    subprocess.run(["ansible-playbook", "-i", INVENTORY_FILE, "sysbench_memory_playbook.yml"], check=True)
+
+def collect_results():
+    """Fetches results from remote hosts and writes them to a CSV file."""
+    os.makedirs("results", exist_ok=True)
+    
+    subprocess.run([
+        "ansible", "all", "-i", INVENTORY_FILE, "-m", "fetch", "-a",
+        "src=/tmp/sysbench_memory_results_{{ inventory_hostname }}.txt dest=results/ flat=yes"
+    ], check=True)
+
+def parse_results():
+    """Extracts relevant sysbench and system details, then saves to a CSV file."""
+    results = []
+    for filename in os.listdir("results"):
+        filepath = os.path.join("results", filename)
+        if os.path.isfile(filepath):
+            with open(filepath, "r") as file:
+                data = file.readlines()
+
+            # Extract information
+            hostname = filename.replace("sysbench_memory_results_", "").replace(".txt", "")
+            metrics = {"Hostname": hostname, "Number of Threads": NUM_THREADS}
+            
+            for line in data:
+                if "CPU Cores:" in line:
+                    metrics["Number of Cores"] = line.split(":")[1].strip()
+                if "Total Memory:" in line:
+                    metrics["Total Memory (MB)"] = line.split(":")[1].strip()
+                if "transferred" in line:
+                    metrics["Transferred (MB)"] = line.split(":")[1].strip().split()[0]
+                if "Operations performed:" in line:
+                    metrics["Operations"] = line.split(":")[1].strip().split()[0]
+                if "Throughput" in line:
+                    metrics["Throughput (MB/s)"] = line.split(":")[1].strip().split()[0]
+                if "avg:" in line and "latency" in line:
+                    metrics["Latency (avg)"] = line.split(":")[1].strip()
+
+            results.append(metrics)
+
+    # Write to CSV
+    with open(OUTPUT_CSV, mode='w', newline='') as file:
+        fieldnames = [
+            "Hostname", "Number of Cores", "Total Memory (MB)", 
+            "Number of Threads", "Transferred (MB)", "Operations", 
+            "Throughput (MB/s)", "Latency (avg)"
+        ]
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results)
+    
+    print(f"✅ Results saved in {OUTPUT_CSV}")
+
+def main():
+    run_ansible_playbook()
+    collect_results()
+    parse_results()
+
+if __name__ == "__main__":
+    main()
